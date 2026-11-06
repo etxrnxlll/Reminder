@@ -35,8 +35,69 @@ class ReminderApp(ctk.CTk):
     def _start_polling(self):
         pass
 
-    def add_reminder(self):
+    def render_reminders(self):
         pass
+
+    def delete_reminder(self, reminder_id):
+        pass
+
+    def check_reminders(self):
+        pass
+
+    def add_reminder(self):
+        reminder_text = self.entry.get()
+        reminder_time_raw = self.time_entry.get()
+
+        if not reminder_text.strip():
+            return
+
+        try:
+            parsed = datetime.strptime(reminder_time_raw, "%H:%M")
+        except ValueError:
+            messagebox.showerror("Error", "Invalid time format. Use HH:MM format.")
+            return
+
+        now = datetime.now()
+        candidate = now.replace(hour=parsed.hour, minute=parsed.minute, second=0, microsecond=0)
+
+        if candidate <= now:
+            candidate = candidate + timedelta(days=1)
+
+        new_reminder = Reminder(
+            id=uuid.uuid4(),
+            reminder_text=reminder_text,
+            reminder_time=candidate,
+            reminder_status="pending"
+        )
+        self.active_reminders.append(new_reminder)
+        self.render_reminders()
+        self.entry.delete(0, "end")
+        self.time_entry.delete(0, "end")
+        print("created:", new_reminder.reminder_time.isoformat())
+
+@dataclass
+class Reminder:
+    id: uuid.UUID
+    reminder_text: str
+    reminder_time: datetime
+    reminder_status: str
+
+    def to_dict(self) -> dict:
+        return {
+            "id": str(self.id),
+            "reminder_text": self.reminder_text,
+            "reminder_time": self.reminder_time.isoformat(),
+            "reminder_status": self.reminder_status
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Reminder":
+        return cls(
+            id=uuid.UUID(data["id"]),
+            reminder_text=data["reminder_text"],
+            reminder_time=datetime.fromisoformat(data["reminder_time"]),
+            reminder_status=data["reminder_status"]
+        )
 
 if __name__ == "__main__":
     app = ReminderApp()
