@@ -7,6 +7,29 @@ from tkinter import messagebox
 ctk.set_appearance_mode("System")  # Modes: system (default), light, dark
 ctk.set_default_color_theme("blue")  # Themes: blue (default), dark-blue, green
 
+@dataclass
+class Reminder:
+    id: uuid.UUID
+    reminder_text: str
+    reminder_time: datetime
+    reminder_status: str
+
+    def to_dict(self) -> dict:
+        return {
+            "id": str(self.id),
+            "reminder_text": self.reminder_text,
+            "reminder_time": self.reminder_time.isoformat(),
+            "reminder_status": self.reminder_status
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Reminder":
+        return cls(
+            id=uuid.UUID(data["id"]),
+            reminder_text=data["reminder_text"],
+            reminder_time=datetime.fromisoformat(data["reminder_time"]),
+            reminder_status=data["reminder_status"]
+        )
 
 class ReminderApp(ctk.CTk):
     def __init__(self):
@@ -27,7 +50,7 @@ class ReminderApp(ctk.CTk):
         self.add_button = ctk.CTkButton(self, text="Add reminder", command=self.add_reminder)
         self.add_button.grid(row=2, column=0, padx=5, pady=5)
 
-        self.list_frame = ctk.CTkScrollableFrame(self, width=200, height=70)
+        self.list_frame = ctk.CTkScrollableFrame(self, width=220, height=100)
         self.list_frame.grid(row=3, column=1, padx=5, pady=5)
         # hack: скрыть скроллбар, публичного API нет
         self.list_frame._scrollbar.configure(height=0)
@@ -36,10 +59,33 @@ class ReminderApp(ctk.CTk):
         pass
 
     def render_reminders(self):
-        pass
+        for w in self.list_frame.winfo_children():
+            w.destroy()
+
+        for r in self.active_reminders:
+            if r.reminder_status == "missed":
+                continue
+
+            row = ctk.CTkFrame(self.list_frame)
+            row.pack(fill="x", padx=2, pady=2)
+
+            prefix = "✓ " if r.reminder_status == "done" else ""
+            text = f'{prefix}{r.reminder_text} - {r.reminder_time.strftime("%d.%m %H:%M")}'
+
+            label = ctk.CTkLabel(row, text=text)
+            label.pack(side="left", padx=5)
+
+            delete_button = ctk.CTkButton(
+                row,
+                text="Delete",
+                width=50,
+                command=lambda rid=r.id: self.delete_reminder(rid)
+            )
+            delete_button.pack(side="right", padx=5)
 
     def delete_reminder(self, reminder_id):
-        pass
+        self.active_reminders = [r for r in self.active_reminders if r.id != reminder_id]
+        self.render_reminders()
 
     def check_reminders(self):
         pass
@@ -74,30 +120,6 @@ class ReminderApp(ctk.CTk):
         self.entry.delete(0, "end")
         self.time_entry.delete(0, "end")
         print("created:", new_reminder.reminder_time.isoformat())
-
-@dataclass
-class Reminder:
-    id: uuid.UUID
-    reminder_text: str
-    reminder_time: datetime
-    reminder_status: str
-
-    def to_dict(self) -> dict:
-        return {
-            "id": str(self.id),
-            "reminder_text": self.reminder_text,
-            "reminder_time": self.reminder_time.isoformat(),
-            "reminder_status": self.reminder_status
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "Reminder":
-        return cls(
-            id=uuid.UUID(data["id"]),
-            reminder_text=data["reminder_text"],
-            reminder_time=datetime.fromisoformat(data["reminder_time"]),
-            reminder_status=data["reminder_status"]
-        )
 
 if __name__ == "__main__":
     app = ReminderApp()
