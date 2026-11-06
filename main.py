@@ -3,6 +3,9 @@ import uuid
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 from tkinter import messagebox
+import os
+import json
+
 # window render
 ctk.set_appearance_mode("System")  # Modes: system (default), light, dark
 ctk.set_default_color_theme("blue")  # Themes: blue (default), dark-blue, green
@@ -31,13 +34,41 @@ class Reminder:
             reminder_status=data["reminder_status"]
         )
 
+class Storage:
+    FILE_PATH = "reminders.json"
+
+    @classmethod
+    def save(cls, reminders: list[Reminder]) -> None:
+        data = [r.to_dict() for r in reminders]
+
+        with open(cls.FILE_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+
+    @classmethod
+    def load(cls) -> list[Reminder]:
+        if not os.path.exists(cls.FILE_PATH):
+            return []
+
+        with open(cls.FILE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        reminders = [Reminder.from_dict(d) for d in data]
+
+        now = datetime.now()
+        for r in reminders:
+            if r.reminder_status == "pending" and now >= r.reminder_time:
+                r.reminder_status = "missed"
+
+        return reminders
+
 class ReminderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.geometry("500x300")
         self.title("Reminder")
-        self.active_reminders = []
+        self.active_reminders = Storage.load()
         self._setup_ui()
+        self.render_reminders()
         self._start_polling()
 
     def _setup_ui(self):
@@ -85,6 +116,7 @@ class ReminderApp(ctk.CTk):
 
     def delete_reminder(self, reminder_id):
         self.active_reminders = [r for r in self.active_reminders if r.id != reminder_id]
+        Storage.save(self.active_reminders)
         self.render_reminders()
 
     def check_reminders(self):
@@ -99,6 +131,7 @@ class ReminderApp(ctk.CTk):
                 changed = True
 
         if changed:
+            Storage.save(self.active_reminders)
             self.render_reminders()
 
         self.after(1000, self.check_reminders)
@@ -129,10 +162,10 @@ class ReminderApp(ctk.CTk):
             reminder_status="pending"
         )
         self.active_reminders.append(new_reminder)
+        Storage.save(self.active_reminders)
         self.render_reminders()
         self.entry.delete(0, "end")
         self.time_entry.delete(0, "end")
-        print("created:", new_reminder.reminder_time.isoformat())
 
 if __name__ == "__main__":
     app = ReminderApp()
