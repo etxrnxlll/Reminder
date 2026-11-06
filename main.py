@@ -34,7 +34,7 @@ class Reminder:
 class ReminderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.geometry("400x240")
+        self.geometry("500x300")
         self.title("Reminder")
         self.active_reminders = []
         self._setup_ui()
@@ -42,21 +42,21 @@ class ReminderApp(ctk.CTk):
 
     def _setup_ui(self):
         self.entry = ctk.CTkEntry(self, placeholder_text="Enter a reminder")
-        self.entry.grid(row=0, column=0, padx=5, pady=5)
+        self.entry.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
 
         self.time_entry = ctk.CTkEntry(self, placeholder_text="Enter a reminder time")
-        self.time_entry.grid(row=1, column=0, padx=5, pady=5)
+        self.time_entry.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
 
         self.add_button = ctk.CTkButton(self, text="Add reminder", command=self.add_reminder)
-        self.add_button.grid(row=2, column=0, padx=5, pady=5)
+        self.add_button.grid(row=2, column=0, padx=5, pady=5, sticky="ew")
 
-        self.list_frame = ctk.CTkScrollableFrame(self, width=220, height=100)
-        self.list_frame.grid(row=3, column=1, padx=5, pady=5)
+        self.list_frame = ctk.CTkScrollableFrame(self, width=270, height=100)
+        self.list_frame.grid(row=0, column=1, rowspan=3, padx=50, pady=5, sticky="nsew")
         # hack: скрыть скроллбар, публичного API нет
         self.list_frame._scrollbar.configure(height=0)
 
     def _start_polling(self):
-        pass
+        self.after(1000, self.check_reminders)
 
     def render_reminders(self):
         for w in self.list_frame.winfo_children():
@@ -88,7 +88,20 @@ class ReminderApp(ctk.CTk):
         self.render_reminders()
 
     def check_reminders(self):
-        pass
+        now = datetime.now()
+        changed = False
+
+        for r in self.active_reminders:
+            if r.reminder_status == "pending" and now >= r.reminder_time:
+                r.reminder_status = "done"
+                self.bell()
+                messagebox.showinfo("Reminder", r.reminder_text.strip())
+                changed = True
+
+        if changed:
+            self.render_reminders()
+
+        self.after(1000, self.check_reminders)
 
     def add_reminder(self):
         reminder_text = self.entry.get()
