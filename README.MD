@@ -1,16 +1,42 @@
-## Simple Reminder
+# Simple Reminder
 
-Этот проект представляет собой простое десктоп приложение для создания напоминаний.
+Простое десктопное приложение для создания и управления напоминаниями. Данные сохраняются в локальный JSON-файл, поэтому напоминания не пропадают после перезапуска программы.
 
-## Установка:
-git clone https://github.com/etxrnxlll/Reminder.git
-cd Reminder
-## Создание виртуального окружения:
-python -m venv .venv
-source .venv/bin/activate  # Для Windows: .venv\Scripts\activate
-## Установка зависимостей:
-pip install -r requirements.txt
+## Возможности
+* Создание напоминаний на ближайшее время (сегодня/завтра).
+* Отображение статусов: `pending` (ожидает), `done` (выполнено), `missed` (пропущено).
+* Автоматическое срабатывание с системным звуком и всплывающим окном.
+* Сохранение истории в `reminders.json` (с обработкой "пропущенных" при запуске).
+* Валидация введенного времени.
 
-Стек:
-Python 3.12.7 
-CustomTkinter
+## Установка и запуск
+
+1. Клонируйте репозиторий:
+    ```bash
+    git clone https://github.com/etxrnxlll/Reminder.git
+    cd Reminder
+    ```
+
+2. Создайте и активируйте виртуальное окружение:
+    ```bash
+    python -m venv .venv
+    # Для Windows:
+    .venv\Scripts\activate
+    # Для macOS/Linux:
+    source .venv/bin/activate
+    ```
+
+3. Установите зависимости:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4. Запустите приложение:
+    ```bash
+    python main.py
+    ```
+
+## Стек
+* Python 3.12.7
+* CustomTkinter
+* Стандартные библиотеки: `json`, `pathlib`, `dataclasses`, `enum`, `uuid`, `datetime`.
