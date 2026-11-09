@@ -3,26 +3,32 @@ import uuid
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 from tkinter import messagebox
-import os
+from pathlib import Path
 import json
+from enum import Enum
 
 # window render
 ctk.set_appearance_mode("System")  # Modes: system (default), light, dark
 ctk.set_default_color_theme("blue")  # Themes: blue (default), dark-blue, green
+
+class ReminderStatus(Enum):
+    PENDING = "pending"
+    DONE = "done"
+    MISSED = "missed"
 
 @dataclass
 class Reminder:
     id: uuid.UUID
     reminder_text: str
     reminder_time: datetime
-    reminder_status: str
+    reminder_status: ReminderStatus
 
     def to_dict(self) -> dict:
         return {
             "id": str(self.id),
             "reminder_text": self.reminder_text,
             "reminder_time": self.reminder_time.isoformat(),
-            "reminder_status": self.reminder_status
+            "reminder_status": self.reminder_status.value
         }
 
     @classmethod
@@ -31,34 +37,35 @@ class Reminder:
             id=uuid.UUID(data["id"]),
             reminder_text=data["reminder_text"],
             reminder_time=datetime.fromisoformat(data["reminder_time"]),
-            reminder_status=data["reminder_status"]
+            reminder_status=ReminderStatus(data["reminder_status"])
         )
 
 class Storage:
-    FILE_PATH = "reminders.json"
+    FILE_PATH = Path(__file__).parent / "reminders.json"
 
     @classmethod
     def save(cls, reminders: list[Reminder]) -> None:
         data = [r.to_dict() for r in reminders]
 
-        with open(cls.FILE_PATH, "w", encoding="utf-8") as f:
+        with cls.FILE_PATH.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
 
     @classmethod
     def load(cls) -> list[Reminder]:
-        if not os.path.exists(cls.FILE_PATH):
+        if not cls.FILE_PATH.exists():
             return []
 
-        with open(cls.FILE_PATH, "r", encoding="utf-8") as f:
+        with cls.FILE_PATH.open("r", encoding="utf-8") as f:
             data = json.load(f)
 
         reminders = [Reminder.from_dict(d) for d in data]
 
         now = datetime.now()
         for r in reminders:
-            if r.reminder_status == "pending" and now >= r.reminder_time:
-                r.reminder_status = "missed"
+            if r.reminder_status == ReminderStatus.PENDING and now >= r.reminder_time:
+                r.reminder_status = ReminderStatus.MISSED
 
+        cls.save(reminders)
         return reminders
 
 class ReminderApp(ctk.CTk):
@@ -94,13 +101,17 @@ class ReminderApp(ctk.CTk):
             w.destroy()
 
         for r in self.active_reminders:
-            if r.reminder_status == "missed":
-                continue
-
             row = ctk.CTkFrame(self.list_frame)
             row.pack(fill="x", padx=2, pady=2)
 
-            prefix = "✓ " if r.reminder_status == "done" else ""
+            prefix = ""
+            if r.reminder_status == ReminderStatus.DONE:
+                prefix = "✓ "
+            elif r.reminder_status == ReminderStatus.MISSED:
+                prefix = "✗ (missed) "
+            else:
+                prefix = ""
+
             text = f'{prefix}{r.reminder_text} - {r.reminder_time.strftime("%d.%m %H:%M")}'
 
             label = ctk.CTkLabel(row, text=text)
@@ -124,8 +135,8 @@ class ReminderApp(ctk.CTk):
         changed = False
 
         for r in self.active_reminders:
-            if r.reminder_status == "pending" and now >= r.reminder_time:
-                r.reminder_status = "done"
+            if r.reminder_status == ReminderStatus.PENDING and now >= r.reminder_time:
+                r.reminder_status = ReminderStatus.DONE
                 self.bell()
                 messagebox.showinfo("Reminder", r.reminder_text.strip())
                 changed = True
@@ -141,6 +152,10 @@ class ReminderApp(ctk.CTk):
         reminder_time_raw = self.time_entry.get()
 
         if not reminder_text.strip():
+            return
+
+        if not reminder_time_raw.strip():
+            messagebox.showerror("Error", "Time cannot be empty.")
             return
 
         try:
@@ -159,7 +174,7 @@ class ReminderApp(ctk.CTk):
             id=uuid.uuid4(),
             reminder_text=reminder_text,
             reminder_time=candidate,
-            reminder_status="pending"
+            reminder_status=ReminderStatus.PENDING
         )
         self.active_reminders.append(new_reminder)
         Storage.save(self.active_reminders)
