@@ -1,0 +1,187 @@
+import customtkinter as ctk
+import uuid
+from datetime import datetime, timedelta
+from dataclasses import dataclass
+from tkinter import messagebox
+from pathlib import Path
+import json
+from enum import Enum
+
+# window render
+ctk.set_appearance_mode("System")  # Modes: system (default), light, dark
+ctk.set_default_color_theme("blue")  # Themes: blue (default), dark-blue, green
+
+class ReminderStatus(Enum):
+    PENDING = "pending"
+    DONE = "done"
+    MISSED = "missed"
+
+@dataclass
+class Reminder:
+    id: uuid.UUID
+    reminder_text: str
+    reminder_time: datetime
+    reminder_status: ReminderStatus
+
+    def to_dict(self) -> dict:
+        return {
+            "id": str(self.id),
+            "reminder_text": self.reminder_text,
+            "reminder_time": self.reminder_time.isoformat(),
+            "reminder_status": self.reminder_status.value
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Reminder":
+        return cls(
+            id=uuid.UUID(data["id"]),
+            reminder_text=data["reminder_text"],
+            reminder_time=datetime.fromisoformat(data["reminder_time"]),
+            reminder_status=ReminderStatus(data["reminder_status"])
+        )
+
+class Storage:
+    FILE_PATH = Path(__file__).parent / "reminders.json"
+
+    @classmethod
+    def save(cls, reminders: list[Reminder]) -> None:
+        data = [r.to_dict() for r in reminders]
+
+        with cls.FILE_PATH.open("w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+
+    @classmethod
+    def load(cls) -> list[Reminder]:
+        if not cls.FILE_PATH.exists():
+            return []
+
+        with cls.FILE_PATH.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        reminders = [Reminder.from_dict(d) for d in data]
+
+        now = datetime.now()
+        for r in reminders:
+            if r.reminder_status == ReminderStatus.PENDING and now >= r.reminder_time:
+                r.reminder_status = ReminderStatus.MISSED
+
+        cls.save(reminders)
+        return reminders
+
+class ReminderApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.geometry("500x300")
+        self.title("Reminder")
+        self.active_reminders = Storage.load()
+        self._setup_ui()
+        self.render_reminders()
+        self._start_polling()
+
+    def _setup_ui(self):
+        self.entry = ctk.CTkEntry(self, placeholder_text="Enter a reminder")
+        self.entry.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+
+        self.time_entry = ctk.CTkEntry(self, placeholder_text="Enter a reminder time")
+        self.time_entry.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
+
+        self.add_button = ctk.CTkButton(self, text="Add reminder", command=self.add_reminder)
+        self.add_button.grid(row=2, column=0, padx=5, pady=5, sticky="ew")
+
+        self.list_frame = ctk.CTkScrollableFrame(self, width=270, height=100)
+        self.list_frame.grid(row=0, column=1, rowspan=3, padx=50, pady=5, sticky="nsew")
+        # hack: скрыть скроллбар, публичного API нет
+        self.list_frame._scrollbar.configure(height=0)
+
+    def _start_polling(self):
+        self.after(1000, self.check_reminders)
+
+    def render_reminders(self):
+        for w in self.list_frame.winfo_children():
+            w.destroy()
+
+        for r in self.active_reminders:
+            row = ctk.CTkFrame(self.list_frame)
+            row.pack(fill="x", padx=2, pady=2)
+
+            prefix = ""
+            if r.reminder_status == ReminderStatus.DONE:
+                prefix = "✓ "
+            elif r.reminder_status == ReminderStatus.MISSED:
+                prefix = "✗ (missed) "
+            else:
+                prefix = ""
+
+            text = f'{prefix}{r.reminder_text} - {r.reminder_time.strftime("%d.%m %H:%M")}'
+
+            label = ctk.CTkLabel(row, text=text)
+            label.pack(side="left", padx=5)
+
+            delete_button = ctk.CTkButton(
+                row,
+                text="Delete",
+                width=50,
+                command=lambda rid=r.id: self.delete_reminder(rid)
+            )
+            delete_button.pack(side="right", padx=5)
+
+    def delete_reminder(self, reminder_id):
+        self.active_reminders = [r for r in self.active_reminders if r.id != reminder_id]
+        Storage.save(self.active_reminders)
+        self.render_reminders()
+
+    def check_reminders(self):
+        now = datetime.now()
+        changed = False
+
+        for r in self.active_reminders:
+            if r.reminder_status == ReminderStatus.PENDING and now >= r.reminder_time:
+                r.reminder_status = ReminderStatus.DONE
+                self.bell()
+                messagebox.showinfo("Reminder", r.reminder_text.strip())
+                changed = True
+
+        if changed:
+            Storage.save(self.active_reminders)
+            self.render_reminders()
+
+        self.after(1000, self.check_reminders)
+
+    def add_reminder(self):
+        reminder_text = self.entry.get()
+        reminder_time_raw = self.time_entry.get()
+
+        if not reminder_text.strip():
+            return
+
+        if not reminder_time_raw.strip():
+            messagebox.showerror("Error", "Time cannot be empty.")
+            return
+
+        try:
+            parsed = datetime.strptime(reminder_time_raw, "%H:%M")
+        except ValueError:
+            messagebox.showerror("Error", "Invalid time format. Use HH:MM format.")
+            return
+
+        now = datetime.now()
+        candidate = now.replace(hour=parsed.hour, minute=parsed.minute, second=0, microsecond=0)
+
+        if candidate <= now:
+            candidate = candidate + timedelta(days=1)
+
+        new_reminder = Reminder(
+            id=uuid.uuid4(),
+            reminder_text=reminder_text,
+            reminder_time=candidate,
+            reminder_status=ReminderStatus.PENDING
+        )
+        self.active_reminders.append(new_reminder)
+        Storage.save(self.active_reminders)
+        self.render_reminders()
+        self.entry.delete(0, "end")
+        self.time_entry.delete(0, "end")
+
+if __name__ == "__main__":
+    app = ReminderApp()
+    app.mainloop()
